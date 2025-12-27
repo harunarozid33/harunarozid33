@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Master Produk - Toko Material</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
+  <style>
+    body { background-color: #f8f9fa; font-family: 'Inter', sans-serif; }
+    .card { border: none; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,.05); }
+    .table thead { background-color: #f1f4f9; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+  <div class="container">
+    <a class="navbar-brand fw-bold" href="#"><i class="fas fa-tools me-2"></i>Toko Material</a>
+    <div class="collapse navbar-collapse" id="navbarNav">
+      <ul class="navbar-nav ms-auto">
+        <li class="nav-item"><a class="nav-link" href="dashboard-admin.html">Admin</a></li>
+        <li class="nav-item"><a class="nav-link" href="kasir.html">Kasir</a></li>
+        <li class="nav-item"><a class="nav-link active" href="produk.html">Produk</a></li>
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<div class="container">
+  <div class="row">
+    <div class="col-md-4 mb-4">
+      <div class="card p-4">
+        <h5 class="card-title fw-bold mb-3">Tambah Produk Baru</h5>
+        <div class="mb-3">
+          <label class="form-label">Nama Produk</label>
+          <input type="text" id="nama" class="form-control" placeholder="Contoh: Semen Gresik">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Harga (Rp)</label>
+          <input type="number" id="harga" class="form-control" placeholder="0">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Kategori</label>
+          <select id="kategori" class="form-select">
+            <option value="">-- Pilih Kategori --</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Satuan</label>
+          <input type="text" id="satuan" class="form-control" placeholder="Contoh: sak, kg, pcs">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Stok Awal</label>
+          <input type="number" id="stok" class="form-control" placeholder="0">
+        </div>
+        <button onclick="tambah()" class="btn btn-primary w-100 fw-bold">
+          <i class="fas fa-save me-2"></i>Simpan Produk
+        </button>
+      </div>
+    </div>
+
+    <div class="col-md-8">
+      <div class="card p-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="card-title fw-bold m-0">Daftar Stok Material</h5>
+          <button onclick="loadProduk()" class="btn btn-sm btn-outline-secondary">
+            <i class="fas fa-sync"></i> Refresh
+          </button>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-hover align-middle">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Nama Produk</th>
+                <th>Kategori</th>
+                <th>Satuan</th>
+                <th>Harga</th>
+                <th>Stok</th>
+                <th class="text-center">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="produk"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="editModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Edit Produk</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="edit_id">
+        <div class="mb-3">
+          <label class="form-label">Nama Produk</label>
+          <input type="text" id="edit_nama" class="form-control">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Kategori</label>
+          <select id="edit_kategori" class="form-select">
+            <option value="">-- Pilih Kategori --</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Satuan</label>
+          <input type="text" id="edit_satuan" class="form-control" placeholder="Contoh: kg, sak, pcs">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Harga</label>
+          <input type="number" id="edit_harga" class="form-control">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Stok</label>
+          <input type="number" id="edit_stok" class="form-control">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+        <button type="button" onclick="update()" class="btn btn-primary">Simpan Perubahan</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = "http://localhost/toko-material/api/api.php/records/produk";
+const KATEGORI_API = "http://localhost/toko-material/api/api.php/records/kategori";
+let myModal;
+let kategoriMap = {};
+
+document.addEventListener('DOMContentLoaded', function() {
+  myModal = new bootstrap.Modal(document.getElementById('editModal'));
+  // Ensure categories load first so products render with category names and edit select is populated
+  loadKategori().then(() => loadProduk());
+});
+
+function loadKategori() {
+  // return promise so callers can wait until categories are loaded
+  return fetch(KATEGORI_API)
+    .then(res => res.json())
+    .then(data => {
+      let sel = document.getElementById('kategori');
+      let selEdit = document.getElementById('edit_kategori');
+      if (sel) sel.innerHTML = '<option value="">-- Pilih Kategori --</option>';
+      if (selEdit) selEdit.innerHTML = '<option value="">-- Pilih Kategori --</option>';
+      data.records.forEach(k => {
+        kategoriMap[k.id] = k.nama_kategori;
+        if (sel) sel.innerHTML += `<option value="${k.id}">${k.nama_kategori}</option>`;
+        if (selEdit) selEdit.innerHTML += `<option value="${k.id}">${k.nama_kategori}</option>`;
+      });
+    });
+}
+
+function loadProduk() {
+  fetch(API)
+    .then(res => res.json())
+    .then(data => {
+      let tbody = document.getElementById("produk");
+      tbody.innerHTML = "";
+      data.records.forEach(p => {
+        let namaKategori = p.id_kategori ? (kategoriMap && kategoriMap[p.id_kategori] ? kategoriMap[p.id_kategori] : 'ID:' + p.id_kategori) : '-';
+        tbody.innerHTML += `
+          <tr>
+            <td class="text-muted">#${p.id}</td>
+            <td class="fw-bold">${p.nama_produk}</td>
+            <td>${namaKategori}</td>
+            <td>${p.satuan || '-'}</td>
+            <td>Rp ${parseFloat(p.harga).toLocaleString()}</td>
+            <td><span class="badge ${p.stok < 10 ? 'bg-danger' : 'bg-success'}">${p.stok}</span></td>
+            <td class="text-center">
+                <button class="btn btn-sm btn-info text-white me-1" onclick="openEdit(${p.id}, '${String(p.nama_produk).replace(/'/g, "\\'")}', ${p.harga}, ${p.stok}, ${p.id_kategori ? p.id_kategori : 'null'}, '${String(p.satuan || '').replace(/'/g, "\\'")}')">
+                  <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn btn-sm btn-danger" onclick="hapus(${p.id})">
+                  <i class="fas fa-trash"></i>
+                </button>
+            </td>
+          </tr>
+        `;
+      });
+    });
+}
+
+function tambah() {
+  let data = {
+    nama_produk: document.getElementById("nama").value,
+    id_kategori: document.getElementById("kategori").value || null,
+    satuan: document.getElementById("satuan").value || null,
+    harga: document.getElementById("harga").value,
+    stok: document.getElementById("stok").value
+  };
+
+  fetch(API, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(data)
+  }).then(() => {
+    loadProduk();
+    // Clear form
+    document.getElementById("nama").value = "";
+    document.getElementById("harga").value = "";
+    document.getElementById("stok").value = "";
+    document.getElementById("satuan").value = "";
+    document.getElementById("kategori").value = "";
+  });
+}
+
+function openEdit(id, nama, harga, stok, id_kategori, satuan) {
+  document.getElementById("edit_id").value = id;
+  document.getElementById("edit_nama").value = nama;
+  document.getElementById("edit_harga").value = harga;
+  document.getElementById("edit_stok").value = stok;
+
+  // set kategori & satuan synchronously; if kategori select not yet populated, reload categories first
+  const selEdit = document.getElementById('edit_kategori');
+  if (selEdit && selEdit.options.length > 1) {
+    selEdit.value = id_kategori || '';
+    document.getElementById('edit_satuan').value = satuan || '';
+    myModal.show();
+  } else {
+    // fallback: load categories and then set values
+    loadKategori().then(() => {
+      if (selEdit) selEdit.value = id_kategori || '';
+      if (document.getElementById('edit_satuan')) document.getElementById('edit_satuan').value = satuan || '';
+      myModal.show();
+    }).catch(() => {
+      // still show modal so user can edit other fields
+      if (document.getElementById('edit_satuan')) document.getElementById('edit_satuan').value = satuan || '';
+      myModal.show();
+    });
+  }
+}
+
+function update() {
+  let id = document.getElementById("edit_id").value;
+  let data = {
+    nama_produk: document.getElementById("edit_nama").value,
+    id_kategori: document.getElementById("edit_kategori").value || null,
+    satuan: document.getElementById("edit_satuan").value || null,
+    harga: document.getElementById("edit_harga").value,
+    stok: document.getElementById("edit_stok").value
+  };
+
+  fetch(API + "/" + id, {
+    method: "PUT",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(data)
+  }).then(() => {
+    myModal.hide();
+    loadProduk();
+  });
+}
+
+function hapus(id) {
+  if (!confirm("Yakin ingin menghapus produk ini?")) return;
+  fetch(API + "/" + id, { method: "DELETE" }).then(() => loadProduk());
+}
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

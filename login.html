@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Login - Toko Material</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
+  <style>
+    body {
+      background: linear-gradient(135deg, #0d6efd 0%, #003d99 100%);
+      height: 100vh;
+      font-family: 'Inter', sans-serif;
+    }
+    .card {
+      border: none;
+      border-radius: 20px;
+      box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+    }
+    .login-icon {
+      width: 80px;
+      height: 80px;
+      background: #f1f4f9;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+      color: #0d6efd;
+      font-size: 2rem;
+    }
+    .form-control {
+      border-radius: 10px;
+      padding: 12px 15px;
+      background: #f8f9fa;
+    }
+    .form-control:focus {
+      box-shadow: none;
+      border-color: #0d6efd;
+      background: #fff;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container d-flex justify-content-center align-items-center" style="min-height:100vh;">
+  <div class="card w-100" style="max-width:400px;">
+    <div class="card-body p-5">
+      <div class="login-icon">
+        <i class="fas fa-tools"></i>
+      </div>
+      <h4 class="text-center fw-bold mb-1">Welcome Back</h4>
+      <p class="text-center text-muted mb-4">Sistem Inventori Toko Material</p>
+
+      <div id="alertBox" class="alert alert-danger d-none" role="alert">
+        <small id="alertMsg"></small>
+      </div>
+
+      <form onsubmit="login(event)">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Username</label>
+          <div class="input-group">
+            <span class="input-group-text bg-transparent border-end-0"><i class="fas fa-user text-muted"></i></span>
+            <input type="text" id="username" class="form-control border-start-0" placeholder="Masukkan username" required>
+          </div>
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label fw-semibold">Password</label>
+          <div class="input-group">
+            <span class="input-group-text bg-transparent border-end-0"><i class="fas fa-lock text-muted"></i></span>
+            <input type="password" id="password" class="form-control border-start-0 border-end-0" placeholder="Masukkan password" required>
+            <span class="input-group-text bg-transparent border-start-0" style="cursor: pointer;" onclick="togglePass()">
+              <i id="eyeIcon" class="fas fa-eye-slash text-muted"></i>
+            </span>
+          </div>
+        </div>
+
+        <button id="btnLogin" type="submit" class="btn btn-primary w-100 py-2 fw-bold shadow-sm">
+          <span id="spinner" class="spinner-border spinner-border-sm me-2 d-none"></span>
+          Masuk ke Sistem
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = "http://localhost/toko-material/api/api.php/records/users";
+
+function togglePass() {
+  const passInput = document.getElementById("password");
+  const eyeIcon = document.getElementById("eyeIcon");
+  if (passInput.type === "password") {
+    passInput.type = "text";
+    eyeIcon.classList.replace("fa-eye-slash", "fa-eye");
+  } else {
+    passInput.type = "password";
+    eyeIcon.classList.replace("fa-eye", "fa-eye-slash");
+  }
+}
+
+function showAlert(msg) {
+  const alertBox = document.getElementById("alertBox");
+  document.getElementById("alertMsg").innerText = msg;
+  alertBox.classList.remove("d-none");
+  setTimeout(() => alertBox.classList.add("d-none"), 3000);
+}
+
+function login(event) {
+  event.preventDefault();
+  
+  const user = document.getElementById("username").value;
+  const pass = document.getElementById("password").value;
+  const btn = document.getElementById("btnLogin");
+  const spinner = document.getElementById("spinner");
+
+  // Loading UI
+  btn.disabled = true;
+  spinner.classList.remove("d-none");
+
+  fetch(`${API}?filter=username,eq,${user}`)
+    .then(res => res.json())
+    .then(data => {
+      btn.disabled = false;
+      spinner.classList.add("d-none");
+
+      if (data.records.length === 0) {
+        showAlert("Username tidak ditemukan!");
+        return;
+      }
+
+      let u = data.records[0];
+
+      // Note: Di lingkungan nyata, gunakan password_verify di server (PHP)
+      if (u.password !== pass) {
+        showAlert("Password yang Anda masukkan salah!");
+        return;
+      }
+
+      // normalize role and save to session (trim + lowercase)
+      let role = (u.role || '').toString().trim().toLowerCase();
+      u.role = role;
+      sessionStorage.setItem("login", JSON.stringify(u));
+
+      // Redirect sesuai role
+      if (role === "admin") {
+        window.location.href = "dashboard-admin.html";
+      } else if (role === "kasir") {
+        window.location.href = "dashboard-kasir.html";
+      } else {
+        showAlert('Role tidak dikenali: ' + (u.role || ''));
+      }
+    })
+    .catch(err => {
+      btn.disabled = false;
+      spinner.classList.add("d-none");
+      showAlert("Gagal terhubung ke server!");
+    });
+}
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Laporan Penjualan - Toko Material</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
+  <style>
+    body { background-color: #f8f9fa; font-family: 'Inter', sans-serif; }
+    .card { border: none; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,.05); }
+    .grand-total-box { background: #e7f1ff; border-radius: 8px; padding: 15px; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+  <div class="container">
+    <a class="navbar-brand fw-bold" href="#"><i class="fas fa-tools me-2"></i>Toko Material</a>
+    <div class="collapse navbar-collapse" id="navbarNav">
+      <ul class="navbar-nav ms-auto">
+        <li class="nav-item"><a class="nav-link" href="dashboard-admin.html">Admin</a></li>
+        <li class="nav-item"><a class="nav-link active" href="laporan.html">Laporan</a></li>
+        <li class="nav-item"><a class="nav-link" href="produk.html">Produk</a></li>
+        <li class="nav-item"><a class="nav-link btn btn-danger btn-sm text-white ms-lg-3" onclick="logout()">Logout</a></li>
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<div class="container">
+  <div class="card p-4 mb-4">
+    <h4 class="fw-bold mb-4 text-secondary"><i class="fas fa-file-invoice-dollar me-2"></i>Laporan Penjualan</h4>
+    
+    <div class="row g-3 align-items-end mb-4">
+      <div class="col-md-3">
+        <label class="form-label fw-bold small">Filter Tanggal</label>
+        <input type="date" id="tanggal" class="form-control">
+      </div>
+      <div class="col-md-6">
+        <button id="btnHarian" onclick="laporanHarian()" class="btn btn-primary">
+          <i class="fas fa-search me-1"></i> Cari Harian
+        </button>
+        <button id="btnTotal" onclick="laporanTotal()" class="btn btn-outline-primary ms-1">
+          <i class="fas fa-list me-1"></i> Lihat Semua
+        </button>
+      </div>
+      <div class="col-md-3 text-end">
+        <button onclick="exportCSV()" class="btn btn-success">
+          <i class="fas fa-file-excel me-1"></i> Export .CSV
+        </button>
+      </div>
+    </div>
+
+    <hr>
+
+    <h5 id="judul" class="text-center my-3 fw-bold text-primary text-uppercase"></h5>
+    <p id="statusLaporan" class="text-center text-muted small mb-3">Silakan pilih filter laporan</p>
+
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>ID Trx</th>
+            <th>Waktu Transaksi</th>
+            <th>Nama Pelanggan</th>
+            <th class="text-end">Total Pembayaran</th>
+          </tr>
+        </thead>
+        <tbody id="data">
+          <tr><td colspan="4" class="text-center text-muted italic">Silakan pilih filter laporan</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="row justify-content-end mt-3">
+      <div class="col-md-4">
+        <div class="grand-total-box d-flex justify-content-between align-items-center">
+          <span class="fw-bold text-secondary">Grand Total:</span>
+          <span class="fs-4 fw-bold text-primary">Rp <span id="grandTotal">0</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = "http://localhost/toko-material/api/api.php/records";
+
+/* ===== PROTEKSI HALAMAN ===== */
+let authUser = JSON.parse(sessionStorage.getItem("login"));
+if (!authUser || (authUser.role || '').toString().trim().toLowerCase() !== "admin") {
+  window.location.href = "login.html";
+}
+
+function logout() {
+  sessionStorage.clear();
+  window.location.href = "login.html";
+}
+
+/* ===== HELPERS (timezone-safe date handling) ===== */
+function toLocalDateInputString(d = new Date()) {
+  // returns YYYY-MM-DD in local timezone suitable for <input type="date">
+  const tzOffset = d.getTimezoneOffset() * 60000;
+  return new Date(d - tzOffset).toISOString().slice(0,10);
+}
+
+function parseServerDatetime(s) {
+  if (!s) return new Date();
+  // parse explicitly to local date to avoid timezone shifts
+  const m = (s || '').toString().match(/(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
+  if (m) {
+    const y = parseInt(m[1]), mo = parseInt(m[2]) - 1, d = parseInt(m[3]);
+    const hh = parseInt(m[4]), mm = parseInt(m[5]), ss = parseInt(m[6]);
+    return new Date(y, mo, d, hh, mm, ss);
+  }
+  // fallback
+  return new Date(s);
+}
+
+/* ===== LOAD LAPORAN TOTAL ===== */
+function laporanTotal() {
+  document.getElementById("judul").innerText = "Laporan Penjualan Keseluruhan";
+  let statusEl = document.getElementById('statusLaporan');
+  if (statusEl) statusEl.innerText = 'Memuat laporan, tunggu sebentar...';
+  // Menggunakan ?join=pelanggan agar id_pelanggan berubah menjadi objek berisi nama
+  fetch(API + "/transaksi?join=pelanggan&order=tanggal,desc")
+    .then(res => res.json())
+    .then(data => {
+      // UI: mark active buttons
+      document.getElementById('btnTotal').classList.remove('btn-outline-primary');
+      document.getElementById('btnTotal').classList.add('btn-primary');
+      document.getElementById('btnHarian').classList.remove('btn-primary');
+      document.getElementById('btnHarian').classList.add('btn-outline-primary');
+      tampilkan(data.records);
+    })
+    .catch(err => {
+      console.error(err);
+      if (statusEl) statusEl.innerText = 'Gagal memuat data laporan.';
+      document.getElementById("data").innerHTML = `<tr><td colspan="4" class="text-center text-danger">Gagal memuat data laporan</td></tr>`;
+      document.getElementById("grandTotal").innerText = "0";
+    });
+}
+
+/* ===== LOAD LAPORAN HARIAN ===== */
+function laporanHarian() {
+  const tgl = document.getElementById("tanggal").value;
+  if (!tgl) return alert("Pilih tanggal dulu!");
+
+  const tglDisplay = new Date(tgl + 'T00:00:00').toLocaleDateString('id-ID');
+  document.getElementById("judul").innerText = "Laporan Penjualan: " + tglDisplay;
+  const statusEl = document.getElementById('statusLaporan');
+  if (statusEl) statusEl.innerText = 'Memuat laporan harian...';
+
+  const btnHarian = document.getElementById('btnHarian');
+  btnHarian.disabled = true;
+
+  // Query by datetime range to avoid timezone/substring issues
+  const start = `${tgl} 00:00:00`;
+  const end = `${tgl} 23:59:59`;
+  const url = `${API}/transaksi?join=pelanggan&order=tanggal,desc&filter=` +
+    encodeURIComponent(`tanggal,ge,${start}`) +
+    `&filter=` + encodeURIComponent(`tanggal,le,${end}`);
+
+  fetch(url)
+    .then(res => res.json())
+    .then(data => {
+      btnHarian.disabled = false;
+      // UI: mark active buttons
+      document.getElementById('btnHarian').classList.remove('btn-outline-primary');
+      document.getElementById('btnHarian').classList.add('btn-primary');
+      document.getElementById('btnTotal').classList.remove('btn-primary');
+      document.getElementById('btnTotal').classList.add('btn-outline-primary');
+      tampilkan(data.records);
+    })
+    .catch(err => {
+      console.error(err);
+      btnHarian.disabled = false;
+      if (statusEl) statusEl.innerText = 'Gagal memuat laporan harian.';
+      document.getElementById("data").innerHTML = `<tr><td colspan="4" class="text-center text-danger">Gagal memuat data laporan</td></tr>`;
+      document.getElementById("grandTotal").innerText = "0";
+    });
+} 
+
+/* ===== RENDER DATA KE TABEL ===== */
+
+// Helper: extract customer name from different API response shapes
+// Returns name string or null if unknown (so we can fetch by id)
+const pelangganCache = {};
+
+function extractNamaPelanggan(t) {
+  if (!t) return null;
+  const tryFrom = (obj) => {
+    if (!obj) return null;
+    if (typeof obj === 'string') return obj;
+    if (typeof obj === 'object') {
+      if (obj.nama_pelanggan) return obj.nama_pelanggan;
+      if (obj.nama) return obj.nama;
+      if (Array.isArray(obj) && obj[0]) return obj[0].nama_pelanggan || obj[0].nama || null;
+    }
+    return null;
+  };
+  return tryFrom(t.id_pelanggan) || tryFrom(t.pelanggan) || t.nama_pelanggan || null;
+}
+
+function getPelangganIdFromRecord(t) {
+  if (!t) return null;
+  const v = t.id_pelanggan;
+  if (!v) {
+    if (t.pelanggan && (t.pelanggan.id || (Array.isArray(t.pelanggan) && t.pelanggan[0] && t.pelanggan[0].id))) {
+      return t.pelanggan.id || (t.pelanggan[0] && t.pelanggan[0].id) || null;
+    }
+    return null;
+  }
+  if (typeof v === 'number' || (typeof v === 'string' && /^\d+$/.test(v))) return Number(v);
+  if (typeof v === 'object' && v.id) return v.id;
+  return null;
+}
+
+function fetchPelangganNameById(id) {
+  if (!id) return Promise.resolve(null);
+  if (pelangganCache[id]) return Promise.resolve(pelangganCache[id]);
+  return fetch(API + '/pelanggan/' + id)
+    .then(res => res.json())
+    .then(d => {
+      // API shape may vary
+      const name = d && (d.nama_pelanggan || d.nama || (d.record && (d.record.nama_pelanggan || d.record.nama)));
+      pelangganCache[id] = name || null;
+      return pelangganCache[id];
+    })
+    .catch(err => {
+      console.error('Gagal fetch pelanggan', err);
+      pelangganCache[id] = null;
+      return null;
+    });
+}
+
+function tampilkan(records) {
+  let tbody = document.getElementById("data");
+  let grandTotal = 0;
+  tbody.innerHTML = "";
+
+  let statusEl = document.getElementById('statusLaporan');
+
+  if (!records || records.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="4" class="text-center p-5 text-muted">Tidak ada transaksi ditemukan</td></tr>`;
+    document.getElementById("grandTotal").innerText = "0";
+    if (statusEl) statusEl.innerText = 'Tidak ada transaksi untuk periode ini.';
+    return;
+  }
+
+  records.forEach(t => {
+    let totalNominal = parseFloat(t.total) || 0;
+    grandTotal += totalNominal;
+
+    // timezone-safe parse for server datetime
+    let waktu = parseServerDatetime(t.tanggal);
+
+    // determine customer name or id to fetch later
+    let namaPelanggan = extractNamaPelanggan(t);
+    const pelangganId = getPelangganIdFromRecord(t);
+
+    // if name is missing but we have an id, render a placeholder and tag the cell for async update
+    const namaCell = namaPelanggan ? `${namaPelanggan}` : (pelangganId ? `<span data-pelanggan-id="${pelangganId}">Memuat...</span>` : 'Umum');
+
+    tbody.innerHTML += `
+      <tr>
+        <td><span class="badge bg-light text-dark">#${t.id}</span></td>
+        <td>${waktu.toLocaleString('id-ID')}</td>
+        <td class="fw-semibold">${namaCell}</td>
+        <td class="text-end fw-bold">Rp ${totalNominal.toLocaleString('id-ID')}</td>
+      </tr>
+    `;
+  });
+
+  // After rendering, batch fetch any missing customer names and update the table
+  const pendingEls = Array.from(document.querySelectorAll('[data-pelanggan-id]'));
+  if (pendingEls.length) {
+    const ids = [...new Set(pendingEls.map(e => e.getAttribute('data-pelanggan-id')))].map(Number);
+    ids.forEach(id => {
+      fetchPelangganNameById(id).then(name => {
+        pendingEls.filter(e => Number(e.getAttribute('data-pelanggan-id')) === id).forEach(el => {
+          el.innerText = name || 'Umum';
+        });
+      });
+    });
+  }
+
+  document.getElementById("grandTotal").innerText = grandTotal.toLocaleString('id-ID');
+  if (statusEl) statusEl.innerText = `Menampilkan ${records.length} transaksi (Grand Total: Rp ${grandTotal.toLocaleString('id-ID')})`;
+}
+
+/* ===== EXPORT KE EXCEL (CSV) ===== */
+function exportCSV() {
+  // export only rows with data (skip empty/no-data placeholder)
+  let headers = ['ID Trx', 'Waktu Transaksi', 'Nama Pelanggan', 'Total Pembayaran'];
+  let rows = Array.from(document.querySelectorAll('#data tr'))
+    .filter(r => {
+      let cols = r.querySelectorAll('td');
+      if (!cols || cols.length < 4) return false;
+      // skip placeholder rows
+      let text = cols[0].innerText || '';
+      return !/Tidak ada transaksi|Silakan pilih/i.test(text);
+    })
+    .map(r => Array.from(r.querySelectorAll('td')).map(c => c.innerText.replace(/Rp\s|#|\./g, '').trim()).join(','));
+
+  if (rows.length === 0) {
+    alert('Tidak ada data untuk diekspor');
+    return;
+  }
+
+  let csvContent = [headers.join(',')].concat(rows).join('\n');
+  let blob = new Blob([csvContent], { type: 'text/csv' });
+  let url = window.URL.createObjectURL(blob);
+  let a = document.createElement('a');
+  a.href = url;
+  a.download = `Laporan_Toko_Material_${new Date().getTime()}.csv`;
+  a.click();
+}
+
+// Set default date value to today (local timezone) for accurate calendar
+(function setDefaultTanggal(){
+  const tanggalEl = document.getElementById('tanggal');
+  if (tanggalEl && !tanggalEl.value) tanggalEl.value = toLocalDateInputString();
+})();</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
